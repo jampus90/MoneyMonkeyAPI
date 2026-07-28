@@ -1,0 +1,6 @@
+@MoneyMonkey_HostAddress = http://localhost:5217
+
+GET {{MoneyMonkey_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
