@@ -4,32 +4,47 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Solution layout
 
-This directory (`MoneyMonkey`) is the solution root. `MoneyMonkey.sln` lives here and wires together four project subfolders via project references:
+This directory (`MoneyMonkey`) is the solution root. `MoneyMonkey.sln` lives here and wires together five project subfolders via project references:
 
 - `MoneyMonkey.API` — ASP.NET Core 8 Web API host (Controllers, `Program.cs`, config, JWT/Swagger wiring). This is the startup/run project.
 - `MoneyMonkey.Application` — services (business logic), JWT settings/token generation.
 - `MoneyMonkey.Communication` — DTOs (`Request/`, `Response/`) and shared `Enums/`. No dependencies on other projects — this is the shared contract layer.
-- `MoneyMonkey.Data` — EF Core `DbContext`, entities, and repositories (data access).
+- `MoneyMonkey.Data` — EF Core `DbContext`, entities, repositories (data access), and EF Core `Migrations/`.
+- `MoneyMonkey.Tests` — xUnit test project covering repositories and services.
 
 Dependency direction: `API -> Application -> Data -> Communication`, and `API`/`Data` also reference `Communication` directly. `Communication` has no project references.
-
-There is no test project in the solution yet. This directory is not currently a git repository.
 
 ## Commands
 
 Run from this directory (the solution root, where `MoneyMonkey.sln` lives):
 
 ```
+dotnet tool restore                       # first time only: installs the dotnet-ef local tool from .config/dotnet-tools.json
 dotnet build MoneyMonkey.sln              # build entire solution
-dotnet run --project MoneyMonkey.API      # run the API
+dotnet run --project MoneyMonkey.API      # run the API (applies pending migrations automatically on startup)
 dotnet restore MoneyMonkey.sln
+dotnet test MoneyMonkey.sln               # run the MoneyMonkey.Tests suite
 ```
 
 Launch profiles (`MoneyMonkey.API/Properties/launchSettings.json`) open Swagger UI at startup:
 - `http` profile: http://localhost:5217/swagger
 - `https` profile: https://localhost:7002/swagger (+ http://localhost:5217)
 
-There is no EF Core migrations folder in `MoneyMonkey.Data` — the Postgres schema (tables `users`, `credentials`, `categories`, `transactions`, plus enum types `user_type`, `transaction_type`, `payment_method`) is expected to already exist in the target database; `OnModelCreating` in `MoneyMonkeyDbContext` maps to it but does not create it. If you add `dotnet-ef` migrations, confirm with the user first since this project currently manages schema out-of-band.
+### Schema changes (EF Core Migrations)
+
+The Postgres schema is owned by EF Core Migrations, not hand-written SQL. Migration files live in `MoneyMonkey.Data/Migrations/`, one file per table as a baseline (`CreateUsersTable`, `CreateCredentialsTable`, `CreateCategoriesTable`, `CreateTransactionsTable`) — keep that one-migration-per-logical-change granularity going forward instead of bundling unrelated table changes into a single migration.
+
+To add a schema change:
+```
+dotnet dotnet-ef migrations add <Name> --project MoneyMonkey.Data --startup-project MoneyMonkey.API
+```
+This only generates a C# migration file (diffed against `MoneyMonkeyDbContext`'s current model) — it does not touch any database. To actually apply it to your local Postgres instance:
+```
+dotnet dotnet-ef database update --project MoneyMonkey.Data --startup-project MoneyMonkey.API
+```
+In the running API, `Program.cs` also calls `Database.Migrate()` once at startup (in every environment, not just Development) so pending migrations are applied automatically the next time the app runs — review generated SQL (`dotnet dotnet-ef migrations script`) before shipping anything schema-breaking, since a bad migration will crash startup.
+
+Applied migrations are tracked in a table named **`Evolution`** (renamed from EF's default `__EFMigrationsHistory` via `npgsqlOptions.MigrationsHistoryTable("Evolution")` in `Program.cs`), not raw SQL run by hand against the database.
 
 ## Architecture
 
@@ -46,11 +61,9 @@ Standard layered flow per feature: **Controller → Service → Repository → `
 - Passwords are hashed with ASP.NET Identity's `IPasswordHasher<User>` (registered as a singleton) and stored in a separate `credentials` table (`Username`/`Password` keyed by `UserId`), decoupled from the `users` table.
 - JWT issuing/validation config lives under the `Jwt` section in `appsettings.json` (`Secret`, `Issuer`, `Audience`, `ExpirationMinutes`), bound to `JwtSettings` (`MoneyMonkey.Application/Settings/JwtSettings.cs`). `TokenService` puts `UserId` in `sub`, full name in `ClaimTypes.Name`, and `UserType` in `ClaimTypes.Role`.
 
-### Postgres enums
+### Enums
 
-Three C# enums (`UserType`, `TransactionType`, `PaymentMethod` in `MoneyMonkey.Communication/Enums/`) map to native Postgres enum types. This mapping must be registered in **two places** that need to stay in sync when adding a new enum:
-1. `Program.cs` — `NpgsqlDataSourceBuilder.MapEnum<T>("pg_type_name")` (for the `NpgsqlDataSource`) and again inside `UseNpgsql(...).MapEnum<T>(...)` (for the EF provider).
-2. `MoneyMonkeyDbContext.OnModelCreating` — `modelBuilder.HasPostgresEnum<T>("public", "pg_type_name")` plus `.HasColumnType("pg_type_name")` on each property using it.
+Three C# enums (`UserType`, `TransactionType`, `PaymentMethod` in `MoneyMonkey.Communication/Enums/`) are stored as plain `text` columns, not native Postgres enum types — each is mapped with `.HasConversion<string>()` on the relevant property inside `MoneyMonkeyDbContext.OnModelCreating`. This is the only place the mapping is registered; `Program.cs` does not need any enum-specific wiring (no `NpgsqlDataSourceBuilder.MapEnum`/`HasPostgresEnum`). Adding a new enum value is a pure C# change — no migration required. Adding a brand-new enum still needs the usual `.HasConversion<string>()` line on its property plus a migration for the new/changed column.
 
 ### Configuration
 

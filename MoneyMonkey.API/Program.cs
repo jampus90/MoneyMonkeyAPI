@@ -6,11 +6,9 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using MoneyMonkey.Application.Services;
 using MoneyMonkey.Application.Settings;
-using MoneyMonkey.Communication.Enums;
 using MoneyMonkey.Data;
 using MoneyMonkey.Data.Entities;
 using MoneyMonkey.Data.Repository;
-using Npgsql;
 
 namespace MoneyMonkey
 {
@@ -25,18 +23,10 @@ namespace MoneyMonkey
             string connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
                 ?? throw new InvalidOperationException("The connection string 'DefaultConnection' has not been initialized.");
 
-            var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
-            dataSourceBuilder.MapEnum<UserType>("user_type");
-            dataSourceBuilder.MapEnum<TransactionType>("transaction_type");
-            dataSourceBuilder.MapEnum<PaymentMethod>("payment_method");
-            var dataSource = dataSourceBuilder.Build();
-
             builder.Services.AddDbContext<MoneyMonkeyDbContext>(options =>
-                options.UseNpgsql(dataSource, npgsqlOptions =>
+                options.UseNpgsql(connectionString, npgsqlOptions =>
                 {
-                    npgsqlOptions.MapEnum<UserType>("user_type");
-                    npgsqlOptions.MapEnum<TransactionType>("transaction_type");
-                    npgsqlOptions.MapEnum<PaymentMethod>("payment_method");
+                    npgsqlOptions.MigrationsHistoryTable("Evolution");
                 }));
 
             builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
@@ -103,6 +93,11 @@ namespace MoneyMonkey
             });
 
             var app = builder.Build();
+
+            using (var scope = app.Services.CreateScope())
+            {
+                scope.ServiceProvider.GetRequiredService<MoneyMonkeyDbContext>().Database.Migrate();
+            }
 
             // Configure the HTTP request pipeline.
             if (app.Environment.IsDevelopment())
