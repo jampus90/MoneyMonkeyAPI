@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MoneyMonkey.Data;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MoneyMonkey.Data.Migrations
 {
     [DbContext(typeof(MoneyMonkeyDbContext))]
-    partial class MoneyMonkeyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260803163713_CreateCreditCardsTable")]
+    partial class CreateCreditCardsTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -137,100 +140,6 @@ namespace MoneyMonkey.Data.Migrations
                     b.ToTable("credit_cards", (string)null);
                 });
 
-            modelBuilder.Entity("MoneyMonkey.Data.Entities.CreditCardInstallment", b =>
-                {
-                    b.Property<int>("CreditCardInstallmentId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("credit_card_installment_id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("CreditCardInstallmentId"));
-
-                    b.Property<int>("CreditCardPurchaseId")
-                        .HasColumnType("integer")
-                        .HasColumnName("credit_card_purchase_id");
-
-                    b.Property<int>("InstallmentNumber")
-                        .HasColumnType("integer")
-                        .HasColumnName("installment_number");
-
-                    b.Property<int>("InvoiceMonth")
-                        .HasColumnType("integer")
-                        .HasColumnName("invoice_month");
-
-                    b.Property<int>("InvoiceYear")
-                        .HasColumnType("integer")
-                        .HasColumnName("invoice_year");
-
-                    b.Property<decimal>("Value")
-                        .HasColumnType("numeric")
-                        .HasColumnName("value");
-
-                    b.HasKey("CreditCardInstallmentId");
-
-                    b.HasIndex("CreditCardPurchaseId");
-
-                    b.ToTable("credit_card_installments", (string)null);
-                });
-
-            modelBuilder.Entity("MoneyMonkey.Data.Entities.CreditCardPurchase", b =>
-                {
-                    b.Property<int>("CreditCardPurchaseId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("credit_card_purchase_id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("CreditCardPurchaseId"));
-
-                    b.Property<int?>("CategoryId")
-                        .HasColumnType("integer")
-                        .HasColumnName("category_id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<int>("CreditCardId")
-                        .HasColumnType("integer")
-                        .HasColumnName("credit_card_id");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("description");
-
-                    b.Property<int>("InstallmentsCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("installments_count");
-
-                    b.Property<bool>("IsSubscription")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_subscription");
-
-                    b.Property<DateOnly>("PurchaseDate")
-                        .HasColumnType("date")
-                        .HasColumnName("purchase_date");
-
-                    b.Property<decimal>("TotalValue")
-                        .HasColumnType("numeric")
-                        .HasColumnName("total_value");
-
-                    b.Property<long>("UserId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("user_id");
-
-                    b.HasKey("CreditCardPurchaseId");
-
-                    b.HasIndex("CategoryId");
-
-                    b.HasIndex("CreditCardId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("credit_card_purchases", (string)null);
-                });
-
             modelBuilder.Entity("MoneyMonkey.Data.Entities.Transaction", b =>
                 {
                     b.Property<int>("TransactionId")
@@ -329,34 +238,6 @@ namespace MoneyMonkey.Data.Migrations
 
             modelBuilder.Entity("MoneyMonkey.Data.Entities.CreditCard", b =>
                 {
-                    b.HasOne("MoneyMonkey.Data.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("MoneyMonkey.Data.Entities.CreditCardInstallment", b =>
-                {
-                    b.HasOne("MoneyMonkey.Data.Entities.CreditCardPurchase", null)
-                        .WithMany()
-                        .HasForeignKey("CreditCardPurchaseId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("MoneyMonkey.Data.Entities.CreditCardPurchase", b =>
-                {
-                    b.HasOne("MoneyMonkey.Data.Entities.Category", null)
-                        .WithMany()
-                        .HasForeignKey("CategoryId");
-
-                    b.HasOne("MoneyMonkey.Data.Entities.CreditCard", null)
-                        .WithMany()
-                        .HasForeignKey("CreditCardId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("MoneyMonkey.Data.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MoneyMonkey.Data;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MoneyMonkey.Data.Migrations
 {
     [DbContext(typeof(MoneyMonkeyDbContext))]
-    partial class MoneyMonkeyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260803163745_CreateCreditCardPurchasesTable")]
+    partial class CreateCreditCardPurchasesTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -135,42 +138,6 @@ namespace MoneyMonkey.Data.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("credit_cards", (string)null);
-                });
-
-            modelBuilder.Entity("MoneyMonkey.Data.Entities.CreditCardInstallment", b =>
-                {
-                    b.Property<int>("CreditCardInstallmentId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("credit_card_installment_id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("CreditCardInstallmentId"));
-
-                    b.Property<int>("CreditCardPurchaseId")
-                        .HasColumnType("integer")
-                        .HasColumnName("credit_card_purchase_id");
-
-                    b.Property<int>("InstallmentNumber")
-                        .HasColumnType("integer")
-                        .HasColumnName("installment_number");
-
-                    b.Property<int>("InvoiceMonth")
-                        .HasColumnType("integer")
-                        .HasColumnName("invoice_month");
-
-                    b.Property<int>("InvoiceYear")
-                        .HasColumnType("integer")
-                        .HasColumnName("invoice_year");
-
-                    b.Property<decimal>("Value")
-                        .HasColumnType("numeric")
-                        .HasColumnName("value");
-
-                    b.HasKey("CreditCardInstallmentId");
-
-                    b.HasIndex("CreditCardPurchaseId");
-
-                    b.ToTable("credit_card_installments", (string)null);
                 });
 
             modelBuilder.Entity("MoneyMonkey.Data.Entities.CreditCardPurchase", b =>
@@ -332,15 +299,6 @@ namespace MoneyMonkey.Data.Migrations
                     b.HasOne("MoneyMonkey.Data.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("MoneyMonkey.Data.Entities.CreditCardInstallment", b =>
-                {
-                    b.HasOne("MoneyMonkey.Data.Entities.CreditCardPurchase", null)
-                        .WithMany()
-                        .HasForeignKey("CreditCardPurchaseId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

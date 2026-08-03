@@ -37,6 +37,10 @@ namespace MoneyMonkey
             builder.Services.AddScoped<CategoryService>();
             builder.Services.AddScoped<TransactionRepository>();
             builder.Services.AddScoped<TransactionService>();
+            builder.Services.AddScoped<CreditCardRepository>();
+            builder.Services.AddScoped<CreditCardService>();
+            builder.Services.AddScoped<CreditCardPurchaseRepository>();
+            builder.Services.AddScoped<CreditCardPurchaseService>();
 
             // JWT authentication
             var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()

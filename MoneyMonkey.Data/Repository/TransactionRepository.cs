@@ -54,7 +54,9 @@ public class TransactionRepository
             Type = request.Type,
             PaymentMethod = request.PaymentMethod,
             CategoryId = request.CategoryId,
-            TransactionDate = request.TransactionDate ?? DateOnly.FromDateTime(DateTime.UtcNow)
+            TransactionDate = request.TransactionDate ?? DateOnly.FromDateTime(DateTime.UtcNow),
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
         };
 
         _context.Transactions.Add(transaction);

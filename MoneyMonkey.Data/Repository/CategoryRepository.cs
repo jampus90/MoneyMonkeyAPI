@@ -34,7 +34,8 @@ public class CategoryRepository
         {
             UserId = userId,
             Name = request.Name,
-            Type = request.Type
+            Type = request.Type,
+            CreatedAt = DateTime.UtcNow
         };
 
         _context.Categories.Add(category);
