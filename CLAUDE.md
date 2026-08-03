@@ -32,7 +32,7 @@ Launch profiles (`MoneyMonkey.API/Properties/launchSettings.json`) open Swagger 
 
 ### Schema changes (EF Core Migrations)
 
-The Postgres schema is owned by EF Core Migrations, not hand-written SQL. Migration files live in `MoneyMonkey.Data/Migrations/`, one file per table as a baseline (`CreateUsersTable`, `CreateCredentialsTable`, `CreateCategoriesTable`, `CreateTransactionsTable`) — keep that one-migration-per-logical-change granularity going forward instead of bundling unrelated table changes into a single migration.
+The Postgres schema is owned by EF Core Migrations, not hand-written SQL. Migration files live in `MoneyMonkey.Data/Migrations/`, one file per table as a baseline (`CreateUsersTable`, `CreateCredentialsTable`, `CreateCategoriesTable`, `CreateTransactionsTable`, `CreateCreditCardsTable`, `CreateCreditCardPurchasesTable`, `CreateCreditCardInstallmentsTable`) — keep that one-migration-per-logical-change granularity going forward instead of bundling unrelated table changes into a single migration.
 
 To add a schema change:
 ```
@@ -56,6 +56,18 @@ Standard layered flow per feature: **Controller → Service → Repository → `
 - **Multi-tenancy by convention**: nearly every query is scoped by `userId` (extracted from the JWT), e.g. `TransactionRepository`/`CategoryRepository` filter `Where(x => x.UserId == userId)`. When adding new queries/entities that belong to a user, follow this same scoping pattern — don't rely on global authorization alone.
 - **Cross-entity validation happens in the repository**, not the DTO: e.g. `TransactionRepository.CreateTransaction` checks the referenced `CategoryId` belongs to the same `userId` before inserting, returning `null` (→ 400) if not.
 
+### Credit cards and invoices (fatura)
+
+Credit card spending is intentionally **not** folded into `Transaction` — it lives in its own parallel flow so a user who doesn't need per-card invoice tracking can just log a `Transaction` with `PaymentMethod = CartaoCredito` and a matching `Category`, while a user who wants that detail uses the dedicated flow below.
+
+- `CreditCard` (`MoneyMonkey.Data/Entities/CreditCard.cs`) stores only what's needed to identify a card and compute its billing cycle — nickname, `Brand` (`CardBrand` enum), **last 4 digits only** (never the full number), `ClosingDay`/`DueDay` (both constrained to **1–28** so month-end date math never has to special-case February), and an optional `CreditLimit`.
+- `CreditCardPurchase` is the user-facing lançamento (description, total value, purchase date, `InstallmentsCount`, optional `CategoryId`, `IsSubscription` bool defaulting to `false` for recurring charges like streaming subscriptions). `CreditCardPurchaseRepository.CreatePurchase` validates `CreditCardId` and (if present) `CategoryId` belong to the same `userId` — same cross-entity-validation-in-repository pattern as `TransactionRepository` — returning `null` (→ 400) otherwise.
+- Each purchase fans out into one `CreditCardInstallment` per parcela. **The invoice cycle (`InvoiceMonth`/`InvoiceYear`) is computed once, at purchase time**, from the card's `ClosingDay` — it is not recalculated later even if the card's `ClosingDay` subsequently changes:
+  - If `PurchaseDate.Day <= ClosingDay`, the first installment closes in the purchase's own month; otherwise it rolls to the next month.
+  - Each subsequent installment adds one more month (with year rollover) to that base.
+  - The last installment absorbs the rounding remainder so the sum of installments always equals `TotalValue` exactly.
+- `CreditCardController`'s fatura endpoint (`GET /api/creditcard/{creditCardId}/fatura`) takes `month`/`year` as optional query params that default to the current month/year when omitted — don't make them required ints again, since `0` is not a valid `DateOnly` month/year and will throw.
+
 ### Auth
 
 - Passwords are hashed with ASP.NET Identity's `IPasswordHasher<User>` (registered as a singleton) and stored in a separate `credentials` table (`Username`/`Password` keyed by `UserId`), decoupled from the `users` table.
@@ -63,7 +75,7 @@ Standard layered flow per feature: **Controller → Service → Repository → `
 
 ### Enums
 
-Three C# enums (`UserType`, `TransactionType`, `PaymentMethod` in `MoneyMonkey.Communication/Enums/`) are stored as plain `text` columns, not native Postgres enum types — each is mapped with `.HasConversion<string>()` on the relevant property inside `MoneyMonkeyDbContext.OnModelCreating`. This is the only place the mapping is registered; `Program.cs` does not need any enum-specific wiring (no `NpgsqlDataSourceBuilder.MapEnum`/`HasPostgresEnum`). Adding a new enum value is a pure C# change — no migration required. Adding a brand-new enum still needs the usual `.HasConversion<string>()` line on its property plus a migration for the new/changed column.
+Four C# enums (`UserType`, `TransactionType`, `PaymentMethod`, `CardBrand` in `MoneyMonkey.Communication/Enums/`) are stored as plain `text` columns, not native Postgres enum types — each is mapped with `.HasConversion<string>()` on the relevant property inside `MoneyMonkeyDbContext.OnModelCreating`. This is the only place the mapping is registered; `Program.cs` does not need any enum-specific wiring (no `NpgsqlDataSourceBuilder.MapEnum`/`HasPostgresEnum`). Adding a new enum value is a pure C# change — no migration required. Adding a brand-new enum still needs the usual `.HasConversion<string>()` line on its property plus a migration for the new/changed column.
 
 ### Configuration
 

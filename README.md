@@ -1,6 +1,6 @@
 # MoneyMonkey
 
-API para controle financeiro pessoal (receitas, despesas e categorias), construída em ASP.NET Core 8 com PostgreSQL, autenticação JWT e arquitetura em camadas.
+API para controle financeiro pessoal (receitas, despesas, categorias e cartões de crédito com controle de fatura), construída em ASP.NET Core 8 com PostgreSQL, autenticação JWT e arquitetura em camadas.
 
 ## Estrutura da solução
 
@@ -21,7 +21,7 @@ Fluxo padrão por funcionalidade: **Controller → Service → Repository → `M
 ## Pré-requisitos
 
 - .NET 8 SDK
-- PostgreSQL rodando e acessível (o schema — tabelas `users`, `credentials`, `categories`, `transactions` — é criado automaticamente pelas EF Core Migrations na primeira vez que a API sobe; não precisa criar nada manualmente no banco)
+- PostgreSQL rodando e acessível (o schema — tabelas `users`, `credentials`, `categories`, `transactions`, `credit_cards`, `credit_card_purchases`, `credit_card_installments` — é criado automaticamente pelas EF Core Migrations na primeira vez que a API sobe; não precisa criar nada manualmente no banco)
 
 ## Configuração
 
@@ -94,8 +94,20 @@ Senhas são hasheadas com `IPasswordHasher<User>` do ASP.NET Identity e armazena
 | POST | `/api/category` | Sim | Cria categoria para o usuário autenticado |
 | GET | `/api/transaction` | Sim | Lista transações do usuário autenticado |
 | POST | `/api/transaction` | Sim | Cria transação (valida que a categoria pertence ao usuário) |
+| GET | `/api/creditcard` | Sim | Lista cartões de crédito do usuário autenticado |
+| POST | `/api/creditcard` | Sim | Cria cartão de crédito (sem guardar o número completo) |
+| POST | `/api/creditcard/{creditCardId}/purchases` | Sim | Lança uma compra no cartão (com parcelamento opcional) |
+| GET | `/api/creditcard/{creditCardId}/fatura?month=&year=` | Sim | Fatura do ciclo informado; `month`/`year` são opcionais e caem no mês atual se omitidos |
 
-Todas as consultas de categorias/transações são isoladas por `userId` (multi-tenancy por convenção, escopo aplicado no repositório).
+Todas as consultas de categorias/transações/cartões são isoladas por `userId` (multi-tenancy por convenção, escopo aplicado no repositório).
+
+### Cartões de crédito e fatura
+
+Lançamentos de cartão vivem em tabelas próprias (`CreditCardPurchase`/`CreditCardInstallment`), separadas de `Transaction` — quem não precisa de controle fino de fatura pode continuar lançando gastos de cartão como uma `Transaction` comum com `PaymentMethod = CartaoCredito`.
+
+- Cada `CreditCard` guarda só apelido, bandeira, **últimos 4 dígitos**, dia de fechamento/vencimento (1–28) e limite opcional — nunca o número completo.
+- Uma compra (`CreditCardPurchase`) pode ser parcelada; cada parcela vira um `CreditCardInstallment` com `InvoiceMonth`/`InvoiceYear` próprios, calculados **no momento da compra** a partir do dia de fechamento do cartão (não recalculado depois): se a compra é até o dia de fechamento, cai na fatura do mês corrente; senão, cai na do mês seguinte. Parcelas seguintes somam +1 mês cada.
+- `IsSubscription` (bool, default `false`) marca gastos recorrentes (assinaturas) dentro de uma compra.
 
 ## Modelo de dados
 
@@ -103,5 +115,8 @@ Todas as consultas de categorias/transações são isoladas por `userId` (multi-
 - **Credential**: `CredentialId`, `UserId`, `Username`, `Password` (hash)
 - **Category**: `CategoryId`, `UserId`, `Name`, `Type` (`TransactionType`: Entrada, Saida), `CreatedAt`
 - **Transaction**: `TransactionId`, `UserId`, `TransactionName`, `Value`, `Type` (`TransactionType`), `PaymentMethod?` (Pix, Dinheiro, CartaoCredito, CartaoDebito, Boleto, Transferencia, Outro), `CategoryId?`, `TransactionDate`, `CreatedAt`, `UpdatedAt`
+- **CreditCard**: `CreditCardId`, `UserId`, `Name` (apelido), `Brand` (`CardBrand`: Visa, Mastercard, Elo, Amex, Outro), `LastFourDigits`, `ClosingDay`, `DueDay`, `CreditLimit?`, `CreatedAt`
+- **CreditCardPurchase**: `CreditCardPurchaseId`, `UserId`, `CreditCardId`, `Description`, `TotalValue`, `PurchaseDate`, `InstallmentsCount`, `CategoryId?`, `IsSubscription`, `CreatedAt`
+- **CreditCardInstallment**: `CreditCardInstallmentId`, `CreditCardPurchaseId`, `InstallmentNumber`, `Value`, `InvoiceMonth`, `InvoiceYear`
 
-Os enums `UserType`, `TransactionType` e `PaymentMethod` são armazenados como `text` no banco (conversão feita pelo EF Core via `HasConversion<string>()`), não como tipos enum nativos do Postgres.
+Os enums `UserType`, `TransactionType`, `PaymentMethod` e `CardBrand` são armazenados como `text` no banco (conversão feita pelo EF Core via `HasConversion<string>()`), não como tipos enum nativos do Postgres.
